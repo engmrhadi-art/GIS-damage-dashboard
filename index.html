@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="لوحة خرائط تجريبية لاستعراض مؤشرات تقييم الأضرار والطرق والأراضي الزراعية باستخدام بيانات اصطناعية غير رسمية.">
+    <meta name="theme-color" content="#182024">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>لوحة تقييم الأضرار - Damage Assessment Dashboard</title>
+    <link rel="stylesheet" href="libs/css/leaflet.css" />
+    <link rel="stylesheet" href="libs/css/MarkerCluster.css" />
+    <link rel="stylesheet" href="libs/css/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="libs/css/all.min.css" />
+    <link rel="stylesheet" href="libs/css/cairo.css" />
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <a class="skip-link" href="#map">انتقل إلى الخريطة</a>
+
+    <header class="header">
+        <div class="header-right">
+            <i class="fas fa-map-location-dot header-icon"></i>
+            <h1>DAMAGE ASSESSMENT <span class="header-sub">— تقييم الأضرار في قطاع غزة</span></h1>
+        </div>
+        <div class="header-center" id="selectedGovBadge" style="display:none;">
+            <span class="badge"><i class="fas fa-map-marker-alt"></i> المحافظة: <span id="selectedGovName"></span></span>
+            <button class="btn-clear" id="btnClearSelection" title="إزالة التحديد" aria-label="إزالة تحديد المحافظة"><i class="fas fa-times" aria-hidden="true"></i></button>
+        </div>
+        <div class="header-tools">
+            <select id="tableLayerSelect" class="header-select" title="عرض بيانات الجدول">
+                <option value="damage">مواقع الأضرار</option>
+                <option value="roads">الطرق</option>
+            </select>
+            <button id="btnChartsToggle" class="header-tool active" title="إظهار/إخفاء الرسوم البيانية">
+                <i class="fas fa-chart-bar" aria-hidden="true"></i><span class="sr-only">إظهار أو إخفاء الرسوم البيانية</span>
+            </button>
+        </div>
+        <div class="header-left">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="بحث عن بلدية، حي..." autocomplete="off" />
+                <i class="fas fa-search"></i>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="demo-notice" id="dataNotice" role="status">
+        <i class="fas fa-circle-info" aria-hidden="true"></i>
+        <span>نسخة تجريبية ببيانات اصطناعية غير مخصصة لاتخاذ القرار أو للاستخدام الرسمي.</span>
+    </div>
+
+    <section class="kpi-section" id="kpiSection">
+        <div class="kpi-card" data-type="total">
+            <div class="kpi-icon"><i class="fas fa-building"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiTotal">0</span>
+                <span class="kpi-label">إجمالي المواقع</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="destroyed" style="border-right:3px solid #8b0000">
+            <div class="kpi-icon" style="color:#8b0000"><i class="fas fa-house-damage"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiDestroyed">0</span>
+                <span class="kpi-label">مدمر</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="severe" style="border-right:3px solid #e74c3c">
+            <div class="kpi-icon" style="color:#e74c3c"><i class="fas fa-house-chimney-crack"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiSevere">0</span>
+                <span class="kpi-label">أضرار بالغة</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="moderate" style="border-right:3px solid #f39c12">
+            <div class="kpi-icon" style="color:#f39c12"><i class="fas fa-house-crack"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiModerate">0</span>
+                <span class="kpi-label">أضرار متوسطة</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="novisible" style="border-right:3px solid #2ecc71">
+            <div class="kpi-icon" style="color:#2ecc71"><i class="fas fa-house"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiNoVisible">0</span>
+                <span class="kpi-label">بدون أضرار ظاهرة</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="roads">
+            <div class="kpi-icon" style="color:#95a5a6"><i class="fas fa-road"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiRoads">0</span>
+                <span class="kpi-label">قطاعات الطرق</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="roadkm">
+            <div class="kpi-icon" style="color:#e67e22"><i class="fas fa-ruler-horizontal"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiRoadKm">0</span>
+                <span class="kpi-label">كم طرق متضررة</span>
+            </div>
+        </div>
+        <div class="kpi-card" data-type="cropland">
+            <div class="kpi-icon" style="color:#2ecc71"><i class="fas fa-seedling"></i></div>
+            <div class="kpi-info">
+                <span class="kpi-value" id="kpiCropland">0</span>
+                <span class="kpi-label">كم² أراضي متضررة</span>
+            </div>
+        </div>
+    </section>
+
+    <main class="main-content">
+        <aside class="sidebar" id="sidebar">
+            <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="إظهار أو إخفاء الفلاتر" aria-expanded="false">
+                <i class="fas fa-filter" aria-hidden="true"></i>
+            </button>
+            <h3><i class="fas fa-sliders-h"></i> الفلاتر</h3>
+
+            <div class="filter-group">
+                <label for="filterGovernorate">المحافظة</label>
+                <select id="filterGovernorate">
+                    <option value="">جميع المحافظات</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filterMunicipality">البلدية</label>
+                <select id="filterMunicipality">
+                    <option value="">جميع البلديات</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filterDamage">تصنيف الضرر</label>
+                <select id="filterDamage">
+                    <option value="">جميع التصنيفات</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <button class="btn-reset" id="btnResetFilters"><i class="fas fa-redo"></i> إعادة تعيين</button>
+            </div>
+
+            <div class="sidebar-legend" aria-label="مفتاح الخريطة">
+                <h4><i class="fas fa-list" aria-hidden="true"></i> مفتاح الخريطة</h4>
+                <div id="legendContent"></div>
+            </div>
+        </aside>
+
+        <div class="map-container">
+            <div id="map" role="region" aria-label="خريطة تفاعلية لمواقع البيانات التجريبية"></div>
+        </div>
+
+        <div class="charts-panel" id="chartsPanel">
+            <div class="charts-panel-resize" id="chartsPanelResize"></div>
+            <div class="charts-panel-header">
+                <h3><i class="fas fa-chart-bar"></i> الرسوم البيانية</h3>
+                <button id="btnCloseCharts" class="charts-panel-close" title="إغلاق" aria-label="إغلاق الرسوم البيانية"><i class="fas fa-times" aria-hidden="true"></i></button>
+            </div>
+            <div class="charts-panel-body">
+                <div class="chart-card">
+                    <h3>توزيع الأضرار</h3>
+                    <canvas id="chartDamage"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>الأضرار حسب المحافظة</h3>
+                    <canvas id="chartByGov"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>أكثر 10 بلديات تضرراً</h3>
+                    <canvas id="chartTopMunicipalities"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>أضرار الطرق</h3>
+                    <canvas id="chartRoads"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>الأراضي الزراعية</h3>
+                    <canvas id="chartCropland"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <section class="table-section" id="tableSection">
+        <div class="table-wrapper">
+            <table id="dataTable">
+                <caption class="sr-only">جدول بيانات المواقع أو الطرق بحسب الاختيار الحالي</caption>
+                <thead id="dataTableHead"></thead>
+                <tbody id="dataTableBody"></tbody>
+            </table>
+        </div>
+        <div class="table-footer">
+            <button class="btn-export" id="btnExportCSV"><i class="fas fa-file-csv"></i> تصدير CSV</button>
+            <div class="table-pagination" id="tablePagination"></div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <p>لوحة تقييم الأضرار &copy; 2026 | بيانات اصطناعية لأغراض العرض التقني فقط وليست تقييمًا رسميًا</p>
+    </footer>
+
+    <script src="libs/js/leaflet.js"></script>
+    <script src="libs/js/leaflet.markercluster.js"></script>
+    <script src="libs/js/chart.umd.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
